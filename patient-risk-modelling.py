@@ -15,12 +15,10 @@
 
 # COMMAND ----------
 
-# DBTITLE 0,load data for training
+# DBTITLE 1,load data for training
 user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().apply('user')
 user_name = user.split("@")[0].replace(".", "_")
-## Specify the path to delta tables on dbfs
 delta_root_path = f"dbfs:/home/{user}/rwe-ehr/delta"
-## Specify the database to make the source data available
 db_name = f"rwd_{user_name}"
 
 print({
@@ -36,13 +34,15 @@ print({
 
 # COMMAND ----------
 
-from etl.ingest import RWDDataset
+from data.helper import RWDDataset
 
-ingestion_helper = RWDDataset(db_name, delta_root_path)
-
-# COMMAND ----------
-
-
+data_helper = RWDDataset(db_name, delta_root_path, spark, dbutils)
+data_helper.pii_col_names = [
+  'SSN','DRIVERS','PASSPORT',
+  'PREFIX','FIRST','LAST','SUFFIX','MAIDEN',
+  'BIRTHPLACE','ADDRESS'
+]
+data_helper.refresh("/databricks-datasets/rwe/ehr/csv")
 
 # COMMAND ----------
 
@@ -84,9 +84,9 @@ import mlflow
 
 # COMMAND ----------
 
-patients = spark.read.format("delta").load(delta_root_path + '/patients').withColumnRenamed('Id', 'PATIENT')
-encounters = spark.read.format("delta").load(delta_root_path + '/encounters').withColumnRenamed('PROVIDER', 'ORGANIZATION')
-organizations = spark.read.format("delta").load(delta_root_path + '/organizations')
+# patients = spark.read.format("delta").load(delta_root_path + '/patients').withColumnRenamed('Id', 'PATIENT')
+# encounters = spark.read.format("delta").load(delta_root_path + '/encounters').withColumnRenamed('PROVIDER', 'ORGANIZATION')
+# organizations = spark.read.format("delta").load(delta_root_path + '/organizations')
 
 # COMMAND ----------
 
@@ -95,12 +95,11 @@ organizations = spark.read.format("delta").load(delta_root_path + '/organization
 
 # COMMAND ----------
 
-patient_encounters = (
-  encounters
-  .join(patients, ['PATIENT'])
-  .join(organizations, ['ORGANIZATION'])
-)
-display(patient_encounters.filter('REASONDESCRIPTION IS NOT NULL').limit(10))
+(
+  data_helper
+  .patient_encounters
+  .filter('REASONDESCRIPTION IS NOT NULL')
+).display()
 
 # COMMAND ----------
 
@@ -110,7 +109,7 @@ display(patient_encounters.filter('REASONDESCRIPTION IS NOT NULL').limit(10))
 
 # COMMAND ----------
 
-all_patients=patient_encounters.select('PATIENT').dropDuplicates()
+all_patients = data_helper.patient_encounters.select('PATIENT').dropDuplicates()
 
 # COMMAND ----------
 
@@ -121,7 +120,8 @@ all_patients=patient_encounters.select('PATIENT').dropDuplicates()
 # COMMAND ----------
 
 positive_patients = (
-  patient_encounters
+  data_helper
+  .patient_encounters
   .select('PATIENT')
   .where(lower("REASONDESCRIPTION").like("%{}%".format(condition)))
   .dropDuplicates()
@@ -145,7 +145,7 @@ patients_to_study = positive_patients.union(negative_patients)
 # COMMAND ----------
 
 qualified_patient_encounters_df = (
-  patient_encounters
+  data_helper.patient_encounters
   .join(patients_to_study,on=['PATIENT'])
   .filter("DESCRIPTION is not NUll")
 )
@@ -171,7 +171,7 @@ display(qualified_patient_encounters_df.limit(10))
 # COMMAND ----------
 
 comorbid_conditions = (
-  positive_patients.join(patient_encounters, ['PATIENT'])
+  positive_patients.join(data_helper.patient_encounters, ['PATIENT'])
   .where(col('REASONDESCRIPTION').isNotNull())
   .dropDuplicates(['PATIENT', 'REASONDESCRIPTION'])
   .groupBy('REASONDESCRIPTION').count()
@@ -300,7 +300,6 @@ display(encounter_features)
 
 # COMMAND ----------
 
-import mlflow
 mlflow.log_params({
   'condition': condition,
   'num_conditions': num_conditions,
@@ -470,7 +469,7 @@ import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
 from mlflow.models.signature import infer_signature
 ## since we want the model to output probabilities (risk) rather than predicted labels, we overwrite 
-## mlflow.pyfun's predict method:
+## mlflow.pyfunc's predict method:
 
 class SklearnModelWrapper(mlflow.pyfunc.PythonModel):
   def __init__(self, model):
@@ -546,11 +545,6 @@ model_details
 # MAGIC Now we can use the model to asses risk on new data
 
 # COMMAND ----------
-
-best_run = mlflow.search_runs(
-  filter_string="tags.mlflow.runName = 'training-logistic-regression'",
-  order_by=['metrics.accuracy DESC']
-).iloc[0]
 
 model_name = 'drug-overdose'
 model_uri = f"models:/{model_name}/production"

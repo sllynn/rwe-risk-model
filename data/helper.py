@@ -1,12 +1,14 @@
 import typing
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import *
 
 class RWDDataset:
-  def __init__(self, db_name: str, delta_root_path: str):
+  def __init__(self, db_name: str, delta_root_path: str, spark: SparkSession, dbutils):
     self.db_name = db_name
     self.delta_root_path = delta_root_path
     self._pii_col_names = []
+    self.spark = spark
+    self.dbutils = dbutils
     
   def refresh(self, ehr_path: str):
     ehr_dfs = self.read_data(ehr_path)
@@ -45,17 +47,16 @@ class RWDDataset:
       .join(self.organizations, ['ORGANIZATION'])
     )
   
-  @staticmethod
-  def read_data(input_path: str) -> typing.Dict[str, DataFrame]:
+  def read_data(self, input_path: str) -> typing.Dict[str, DataFrame]:
     df_dict = {}
-    for path,name in [(f.path,f.name) for f in dbutils.fs.ls(input_path) if f.name !='README.txt']:  
+    for path,name in [(f.path,f.name) for f in self.dbutils.fs.ls(input_path) if f.name !='README.txt']:  
       df_name = name.replace('.csv','')
-      df_dict[df_name] = spark.read.csv(path, header=True, inferSchema=True)
+      df_dict[df_name] = self.spark.read.csv(path, header=True, inferSchema=True)
     return df_dict
   
   @property
   def patients(self) -> DataFrame:
-    return spark.table("patients")
+    return self.spark.table("patients")
   
   @patients.setter
   def patients(self, df: DataFrame):
@@ -63,7 +64,7 @@ class RWDDataset:
     
   @property
   def organizations(self) -> DataFrame:
-    return spark.table("organizations")
+    return self.spark.table("organizations")
   
   @organizations.setter
   def organizations(self, df: DataFrame):
@@ -71,7 +72,7 @@ class RWDDataset:
     
   @property
   def providers(self) -> DataFrame:
-    return spark.table("providers")
+    return self.spark.table("providers")
   
   @providers.setter
   def providers(self, df: DataFrame):
@@ -79,7 +80,7 @@ class RWDDataset:
     
   @property
   def encounters(self) -> DataFrame:
-    return spark.table("encounters")
+    return self.spark.table("encounters")
   
   @encounters.setter
   def encounters(self, df: DataFrame):
@@ -87,7 +88,7 @@ class RWDDataset:
     
   @property
   def patient_encounters(self) -> DataFrame:
-    return spark.table("patient_encounters")
+    return self.spark.table("patient_encounters")
   
   @patient_encounters.setter
   def patient_encounters(self, df: DataFrame):
@@ -107,15 +108,15 @@ class RWDDataset:
     return sensitive_data
   
   def drop_all_tables(self):
-    spark.sql(f"drop database if exists {self.db_name} cascade")
+    self.spark.sql(f"drop database if exists {self.db_name} cascade")
   
   def clear_delta_path(self):
-    dbutils.fs.rm(self.delta_root_path, True)
+    self.dbutils.fs.rm(self.delta_root_path, True)
     
   def create_database(self):
-    spark.sql(f"create database {self.db_name} comment 'Database for real world data' location '{self.delta_root_path}/database'")
-    spark.sql(f"use {self.db_name}")
+    self.spark.sql(f"create database {self.db_name} comment 'Database for real world data' location '{self.delta_root_path}/database'")
+    self.spark.sql(f"use {self.db_name}")
     
   def save_to_table(self, df: DataFrame, entity: str):
-    df.write.mode("overwrite").saveAsTable(entity, f"{self.delta_root_path}/{entity}")
+    df.write.mode("overwrite").saveAsTable(name=entity, format="delta", path=f"{self.delta_root_path}/{entity}")
   
