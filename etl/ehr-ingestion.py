@@ -74,9 +74,7 @@ dbutils.widgets.remove("delta_root_path")
 # COMMAND ----------
 
 ## Specify the path to delta tables on dbfs
-user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().apply('user')
-delta_root_path = f"dbfs:/home/{user}/rwe-ehr/delta"
-dbutils.widgets.text("delta_root_path", delta_root_path)
+delta_root_path = f"dbfs:/home/stuart@databricks.com/rwe-ehr/delta"
 
 # COMMAND ----------
 
