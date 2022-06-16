@@ -30,7 +30,7 @@ print({
 
 # COMMAND ----------
 
-# dbutils.notebook.run("./00-etl-rwd", 600, {"delta_root_path": delta_root_path})
+# %run ./etl/ehr-ingestion
 
 # COMMAND ----------
 
