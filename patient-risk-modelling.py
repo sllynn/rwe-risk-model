@@ -51,17 +51,10 @@ data_helper.refresh("/databricks-datasets/rwe/ehr/csv")
 
 # COMMAND ----------
 
-dbutils.widgets.text('condition', 'drug overdose', 'Condition to model')
-dbutils.widgets.text('num_conditions', '10', '# of comorbidities to include')
-dbutils.widgets.text('num_days', '90', '# of days to use')
-dbutils.widgets.text('num_days_future', '10', '# of days in future for forecasting')
-
-# COMMAND ----------
-
-condition=dbutils.widgets.get('condition')
-num_conditions=int(dbutils.widgets.get('num_conditions'))
-num_days=int(dbutils.widgets.get('num_days'))
-num_days_future=int(dbutils.widgets.get('num_days_future'))
+condition = dbutils.widgets.get('condition')
+num_conditions = int(dbutils.widgets.get('num_conditions'))
+num_days = int(dbutils.widgets.get('num_days'))
+num_days_future = int(dbutils.widgets.get('num_days_future'))
 
 # COMMAND ----------
 
@@ -84,14 +77,8 @@ import mlflow
 
 # COMMAND ----------
 
-# patients = spark.read.format("delta").load(delta_root_path + '/patients').withColumnRenamed('Id', 'PATIENT')
-# encounters = spark.read.format("delta").load(delta_root_path + '/encounters').withColumnRenamed('PROVIDER', 'ORGANIZATION')
-# organizations = spark.read.format("delta").load(delta_root_path + '/organizations')
-
-# COMMAND ----------
-
 # MAGIC %md
-# MAGIC Create a dataframe of all patient encounteres
+# MAGIC Create a dataframe of all patient encounters
 
 # COMMAND ----------
 
@@ -154,7 +141,7 @@ qualified_patient_encounters_df.count()
 # COMMAND ----------
 
 # DBTITLE 0,distribution of age by gender
-display(qualified_patient_encounters_df.limit(10))
+display(qualified_patient_encounters_df)
 
 # COMMAND ----------
 
@@ -193,12 +180,13 @@ def add_comorbidities(qualified_patient_encounters_df, comorbidity_list):
   output_df = qualified_patient_encounters_df
   
   for idx, comorbidity in enumerate(comorbidity_list):
-      output_df = (
-        output_df
-        .withColumn(f"comorbidity_{idx}", (output_df['REASONDESCRIPTION'].like('%' + comorbidity['REASONDESCRIPTION'] + '%')).cast('int'))
-        .withColumn(f"comorbidity_{idx}",coalesce(col(f"comorbidity_{idx}"),lit(0))) # replacing null values with 0
-        .cache()
-      )
+    col_name = f"comorbidity_{idx}"
+    output_df = (
+      output_df
+      .withColumn(col_name, (output_df['REASONDESCRIPTION'].like('%' + comorbidity['REASONDESCRIPTION'] + '%')).cast('int'))
+      .withColumn(col_name, coalesce(col(col_name), lit(0))) # replacing null values with 0
+      .cache()
+    )
   return(output_df)
 
 # COMMAND ----------
@@ -566,3 +554,14 @@ features_df = spark.read.load(delta_root_path+'/encounter_features').limit(100)
 # COMMAND ----------
 
 clf.predict(features_df.select(selected_features).toPandas())
+
+# COMMAND ----------
+
+dbutils.notebook.exit("0")
+
+# COMMAND ----------
+
+dbutils.widgets.text('condition', 'drug overdose', 'Condition to model')
+dbutils.widgets.text('num_conditions', '10', '# of comorbidities to include')
+dbutils.widgets.text('num_days', '90', '# of days to use')
+dbutils.widgets.text('num_days_future', '10', '# of days in future for forecasting')

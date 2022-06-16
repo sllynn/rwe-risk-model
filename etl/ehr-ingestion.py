@@ -1,13 +1,15 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC ##<img src="https://databricks.com/wp-content/themes/databricks/assets/images/header_logo_2x.png" alt="logo" width="150"/> 
-# MAGIC 
 # MAGIC # EHR Data Analysis
-# MAGIC ## 1. ETL
-# MAGIC 
+# MAGIC ##<img src="https://databricks.com/wp-content/themes/databricks/assets/images/header_logo_2x.png" alt="logo" width="150"/>
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## ETL
 # MAGIC - **Data**: We use a realistic simulation of patient EHR data using **[synthea](https://github.com/synthetichealth/synthea)**, for ~10,000 patients in Massachusetts
 # MAGIC - **Ingestion and De-identification**: We use **pyspark** to read data from csv files, de-identify patient PII and write to Delta Lake
-# MAGIC - **Database creation**: We then use delta tables to create a database of pateint recprds for subsequent data analysis
+# MAGIC - **Database creation**: We then use delta tables to create a database of patient records for subsequent data analysis
 # MAGIC <div style="text-align: center; line-height: 0; padding-top: 9px;">
 # MAGIC <img src="https://amir-hls.s3.us-east-2.amazonaws.com/public/rwe-uap.png" width=700>
 # MAGIC </div>
